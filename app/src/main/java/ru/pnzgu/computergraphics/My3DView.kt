@@ -7,8 +7,7 @@ import android.graphics.Paint
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
-import kotlin.math.cos
-import kotlin.math.sin
+import kotlin.math.*
 
 
 class My3DView(context: Context, attributes: AttributeSet) : View(context, attributes) {
@@ -60,17 +59,22 @@ class My3DView(context: Context, attributes: AttributeSet) : View(context, attri
     private var totalX = 0F
     private var totalY = 0F
 
-    var rotationAngleX = 0F
+    var rotationAngleX = (160.0 / 180.0 * PI - PI).toFloat()
         set(value) {
             field = value
             invalidate()
         }
-    var rotationAngleY = 0F
+    var rotationAngleY = (160.0 / 180.0 * PI - PI).toFloat()
         set(value) {
             field = value
             invalidate()
         }
-    var scaling = 1F
+    var scaling = 15F
+        set(value) {
+            field = value
+            invalidate()
+        }
+    var invisible = false
         set(value) {
             field = value
             invalidate()
@@ -80,16 +84,16 @@ class My3DView(context: Context, attributes: AttributeSet) : View(context, attri
         return matrix dot listOf(
             listOf(scaling, 0F, 0F, 0F),
             listOf(0F, -scaling, 0F, 0F),
-            listOf(0F, 0F, 0F, 0F),
+            listOf(0F, 0F, scaling, 0F),
             listOf(width / 2F, height / 2F, 0F, 1F)
         )
     }
 
     private fun rotate(matrix: List<List<Float>>): List<List<Float>> {
         return matrix dot listOf(
-            listOf(cos(rotationAngleY), -sin(rotationAngleY), 0F, 0F),
+            listOf(cos(rotationAngleY), sin(rotationAngleY), 0F, 0F),
             listOf(0F, 1F, 0F, 0F),
-            listOf(sin(rotationAngleY), 0F, cos(rotationAngleY), 0F),
+            listOf(-sin(rotationAngleY), 0F, cos(rotationAngleY), 0F),
             listOf(0F, 0F, 0F, 1F)
         ) dot listOf(
             listOf(1F, 0F, 0F, 0F),
@@ -122,17 +126,192 @@ class My3DView(context: Context, attributes: AttributeSet) : View(context, attri
         setMeasuredDimension(sizeX, sizeY)
     }
 
-    private fun Canvas.push(matrix: List<List<Float>>, amount: Float) {
+    private fun push(matrix: List<List<Float>>, amount: Float) {
         val deepMatrix = matrix.map { (x, y, z, f) -> listOf(x, y, z + amount, f) }
         drawPolygon(executeOrder66(matrix))
         drawPolygon(executeOrder66(deepMatrix))
         for (i in matrix.indices) {
-            drawPolygon(executeOrder66(listOf(matrix[i], deepMatrix[i])))
+            drawPolygon(
+                executeOrder66(
+                    listOf(
+                        matrix[i],
+                        matrix[(i + 1) % matrix.size],
+                        deepMatrix[(i + 1) % matrix.size],
+                        deepMatrix[i]
+                    )
+                )
+            )
         }
     }
 
+    private lateinit var zBuffer: Array<FloatArray>
+    private lateinit var colorBuffer: Array<BooleanArray>
+
+    private fun getZ(point: List<Float>, surfaceParameters: List<Float>): Float {
+        val (ax, ay) = point
+        val (A, B, C, D) = surfaceParameters
+        return (ax * A + ay * B + D) / -C
+    }
+
+    private infix fun List<Float>.dot(bVector: List<Float>): Double {
+        val (ax, ay) = this
+        val (bx, by) = bVector
+        return (ax * by).toDouble() - (bx * ay).toDouble()
+    }
+
+    private infix fun List<Float>.inside(polygon: List<List<Float>>): Boolean {
+        val signed: Double = (polygon[1] - this) dot (polygon[1] - polygon[0])
+        for (i in 2 until polygon.size) {
+            if (signed * ((polygon[i] - this) dot (polygon[i] - polygon[i - 1])) < 0)
+                return false
+        }
+        return true
+    }
+
+    private fun putPixel(x: Int, y: Int, surfaceParameters: List<Float>, color: Boolean) {
+        if (x !in 0 until sizeX || y !in 0 until sizeY)
+            return
+        val pixel = listOf(x.toFloat(), y.toFloat())
+        val z = getZ(pixel, surfaceParameters)
+        if (zBuffer[x][y] < z || zBuffer[x][y] == z && color) {
+            zBuffer[x][y] = z
+            colorBuffer[x][y] = color
+        }
+    }
+
+    private operator fun List<Float>.minus(other: List<Float>): List<Float> {
+        if (size == other.size) {
+            return mapIndexed { index, it -> it - other[index] }
+        }
+        return listOf()
+    }
+
+    private fun drawLine(a: List<Float>, b: List<Float>, surfaceParameters: List<Float>) {
+        val (ix, iy) = b
+        val (jx, jy) = a
+
+        val x2 = (if (ix < jx) floor(ix) else ceil(ix)).toInt()
+        val y2 = (if (iy < jy) floor(iy) else ceil(iy)).toInt()
+        val x1 = (if (jx < ix) floor(jx) else ceil(jx)).toInt()
+        val y1 = (if (jy < iy) floor(jy) else ceil(jy)).toInt()
+        val dx = abs(x2 - x1)
+        val dy = abs(y2 - y1)
+        val sx = if (x2 >= x1) 1 else -1
+        val sy = if (y2 >= y1) 1 else -1
+
+        if (dy <= dx) {
+            var d = dy * 2 - dx
+            val d1 = dy * 2
+            val d2 = (dy - dx) * 2
+
+            var x = x1 + sx
+            var y = y1
+            var i = 1
+
+            putPixel(x1, y1, surfaceParameters, true)
+
+            while (i <= dx) {
+                if (d > 0) {
+                    d += d2
+                    y += sy
+                } else {
+                    d += d1
+                }
+                putPixel(x, y, surfaceParameters, true)
+                i++
+                x += sx
+            }
+        } else {
+            var d = dx * 2 - dy
+            val d1 = dx * 2
+            val d2 = (dx - dy) * 2
+
+            var x = x1
+            var y = y1 + sy
+            var i = 1
+
+            putPixel(x1, y1, surfaceParameters, true)
+
+            while (i <= dy) {
+                if (d > 0) {
+                    d += d2
+                    x += sx
+                } else {
+                    d += d1
+                }
+                putPixel(x, y, surfaceParameters, true)
+                i++
+                y += sy
+            }
+        }
+    }
+
+    private fun drawPolygon(points: List<List<Float>>) {
+        val (ax, ay, az) = points[2] - points[0]
+        val (bx, by, bz) = points[2] - points[1]
+        val (px, py, pz) = points[2]
+        val nx = ay * bz - by * az
+        val ny = bx * az - ax * bz
+        val nz = ax * by - bx * ay
+        val surfaceParameters = listOf(nx, ny, nz, -(nx * px + ny * py + nz * pz))
+
+        if (invisible) {
+            for (x in max(
+                0,
+                floor(points.minOf { it[0] }).toInt()
+            )..min(
+                sizeX - 1,
+                ceil(points.maxOf { it[0] }).toInt()
+            )) {
+                for (y in max(
+                    0,
+                    floor(points.minOf { it[1] }).toInt()
+                )..min(
+                    sizeX - 1,
+                    ceil(points.maxOf { it[1] }).toInt()
+                )) {
+                    val pixel = listOf(x.toFloat(), y.toFloat(), 0F, 1F)
+                    if (pixel inside points) {
+                        putPixel(x, y, surfaceParameters, false)
+                    }
+                }
+            }
+        }
+
+        for (point in 1 until points.size) {
+            drawLine(points[point - 1], points[point], surfaceParameters)
+        }
+    }
+
+    private fun Canvas.zFlush() {
+        colorBuffer.forEachIndexed { x, colorRow ->
+            colorRow.forEachIndexed { y, color ->
+                if (color) drawPoint(x.toFloat(), y.toFloat(), paint)
+            }
+        }
+    }
+
+    private fun cleanBuffer() {
+        for (i in zBuffer.indices) {
+            for (j in zBuffer[i].indices) {
+                zBuffer[i][j] = Float.NEGATIVE_INFINITY
+                colorBuffer[i][j] = false
+            }
+        }
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        zBuffer = Array(sizeX) { FloatArray(sizeY) { Float.NEGATIVE_INFINITY } }
+        colorBuffer = Array(sizeX) { BooleanArray(sizeY) { false } }
+    }
+
+
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+
+        cleanBuffer()
+
         canvas.apply {
             val carMatrix = pointMatrix.slice(car)
             push(carMatrix, -40F)
@@ -145,6 +324,7 @@ class My3DView(context: Context, attributes: AttributeSet) : View(context, attri
             push(deepLWheel, 5F)
             push(deepRWheel, 5F)
 
+            zFlush()
         }
     }
 
@@ -171,13 +351,5 @@ class My3DView(context: Context, attributes: AttributeSet) : View(context, attri
     override fun performClick(): Boolean {
         super.performClick()
         return true
-    }
-
-    private fun Canvas.drawPolygon(points: List<List<Float>>) {
-        for (i in (1 until points.size)) {
-            val (ax, ay) = points[i - 1]
-            val (bx, by) = points[i]
-            drawLine(ax, ay, bx, by, paint)
-        }
     }
 }

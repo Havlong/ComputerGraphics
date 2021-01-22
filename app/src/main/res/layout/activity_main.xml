@@ -24,7 +24,7 @@
         android:layout_marginStart="8dp"
         android:layout_marginEnd="8dp"
         android:max="360"
-        android:progress="180"
+        android:progress="160"
         app:layout_constraintBottom_toTopOf="@+id/seekBarY"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="1.0"
@@ -38,7 +38,7 @@
         android:layout_marginEnd="8dp"
         android:layout_marginBottom="8dp"
         android:max="99"
-        android:progress="0"
+        android:progress="14"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
@@ -50,9 +50,16 @@
         android:layout_marginStart="8dp"
         android:layout_marginEnd="8dp"
         android:max="360"
-        android:progress="180"
+        android:progress="160"
         app:layout_constraintBottom_toTopOf="@+id/seekBarScale"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
+
+    <ToggleButton
+        android:id="@+id/toggleButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

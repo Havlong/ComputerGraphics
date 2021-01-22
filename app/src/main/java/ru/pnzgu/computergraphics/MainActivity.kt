@@ -2,6 +2,7 @@ package ru.pnzgu.computergraphics
 
 import android.os.Bundle
 import android.widget.SeekBar
+import android.widget.ToggleButton
 import androidx.appcompat.app.AppCompatActivity
 import kotlin.math.PI
 
@@ -24,14 +25,14 @@ class MainActivity : AppCompatActivity() {
         val seekBarY: SeekBar = findViewById(R.id.seekBarY)
         seekBarY.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                mainView.rotationAngleY = (PI - progress / 180.0 * PI).toFloat()
+                mainView.rotationAngleY = (progress / 180.0 * PI - PI).toFloat()
             }
 
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
-        val seekBar2: SeekBar = findViewById(R.id.seekBarScale)
-        seekBar2.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+        val seekBarScale: SeekBar = findViewById(R.id.seekBarScale)
+        seekBarScale.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 mainView.scaling = (progress + 1).toFloat()
             }
@@ -39,5 +40,8 @@ class MainActivity : AppCompatActivity() {
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
+
+        val toggleButton: ToggleButton = findViewById(R.id.toggleButton)
+        toggleButton.setOnClickListener { mainView.invisible = !mainView.invisible }
     }
 }
